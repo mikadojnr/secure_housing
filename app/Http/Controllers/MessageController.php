@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Controller;
 use App\Models\Message;
 use App\Models\User;
 use App\Models\Property;
@@ -52,7 +53,7 @@ class MessageController extends Controller
 
     public function show(User $user, Request $request)
     {
-        $propertyId = $request->get('property');
+        $propertyId = $request->get('property_id') ?? $request->get('property');
         $currentUserId = Auth::id();
 
         $messages = Message::where(function ($query) use ($currentUserId, $user) {
@@ -78,7 +79,7 @@ class MessageController extends Controller
 
         $property = $propertyId ? Property::find($propertyId) : null;
 
-        return view('messages.show', compact('messages', 'user', 'property'));
+        return view('messages.show', compact('messages', 'user', 'property', 'propertyId'));
     }
 
     public function store(Request $request)
@@ -92,10 +93,34 @@ class MessageController extends Controller
         $validated['sender_id'] = Auth::id();
         $validated['is_read'] = false;
 
+        // Basic fraud detection
+        $suspiciousPatterns = [
+            'wire transfer', 'western union', 'moneygram', 'cashier check',
+            'certified check', 'money order', 'advance fee', 'processing fee',
+            'verification fee', 'send money', 'urgent', 'emergency',
+            'overseas', 'nigeria', 'ghana', 'cameroon',
+        ];
+
+        $content = strtolower($validated['content']);
+        $isSuspicious = false;
+
+        foreach ($suspiciousPatterns as $pattern) {
+            if (strpos($content, $pattern) !== false) {
+                $isSuspicious = true;
+                break;
+            }
+        }
+
+        $validated['is_flagged'] = $isSuspicious;
+
         $message = Message::create($validated);
 
         if ($request->expectsJson()) {
             return response()->json($message->load(['sender', 'recipient', 'property']));
+        }
+
+        if ($isSuspicious) {
+            return back()->with('warning', 'Your message has been flagged for review due to suspicious content.');
         }
 
         return back()->with('success', 'Message sent successfully!');

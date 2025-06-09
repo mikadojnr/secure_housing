@@ -9,7 +9,6 @@ use Illuminate\Notifications\Notifiable;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 use Laravel\Jetstream\HasProfilePhoto;
 use Laravel\Sanctum\HasApiTokens;
-use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable implements MustVerifyEmail
 {
@@ -18,14 +17,23 @@ class User extends Authenticatable implements MustVerifyEmail
     use HasProfilePhoto;
     use Notifiable;
     use TwoFactorAuthenticatable;
-    use HasRoles;
 
+    /**
+     * The attributes that are mass assignable.
+     *
+     * @var array<int, string>
+     */
     protected $fillable = [
         'name',
         'email',
         'password',
     ];
 
+    /**
+     * The attributes that should be hidden for serialization.
+     *
+     * @var array<int, string>
+     */
     protected $hidden = [
         'password',
         'remember_token',
@@ -33,11 +41,20 @@ class User extends Authenticatable implements MustVerifyEmail
         'two_factor_secret',
     ];
 
+    /**
+     * The attributes that should be cast.
+     *
+     * @var array<string, string>
+     */
     protected $casts = [
         'email_verified_at' => 'datetime',
-        'password' => 'hashed',
     ];
 
+    /**
+     * The accessors to append to the model's array form.
+     *
+     * @var array<int, string>
+     */
     protected $appends = [
         'profile_photo_url',
     ];
@@ -47,16 +64,9 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasOne(UserProfile::class);
     }
 
-    // app/Models/User.php
-    public function userProfile()
+    public function UserProfile()
     {
         return $this->hasOne(UserProfile::class);
-    }
-
-
-    public function verifications()
-    {
-        return $this->hasMany(Verification::class);
     }
 
     public function properties()
@@ -69,6 +79,21 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(Booking::class, 'student_id');
     }
 
+    public function reviews()
+    {
+        return $this->hasMany(Review::class, 'reviewer_id');
+    }
+
+    public function verifications()
+    {
+        return $this->hasMany(Verification::class);
+    }
+
+    public function favorites()
+    {
+        return $this->hasMany(Favorite::class);
+    }
+
     public function sentMessages()
     {
         return $this->hasMany(Message::class, 'sender_id');
@@ -79,21 +104,29 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(Message::class, 'recipient_id');
     }
 
-    public function reviews()
+    public function getUserTypeAttribute()
     {
-        return $this->hasMany(Review::class, 'reviewer_id');
+        return $this->profile->user_type ?? null;
     }
 
-    public function isVerified($type = 'identity')
+    public function isVerified($verificationType = 'identity')
     {
         return $this->verifications()
-            ->where('verification_type', $type)
+            ->where('verification_type', $verificationType)
             ->where('status', 'verified')
             ->where(function ($query) {
                 $query->whereNull('expires_at')
                     ->orWhere('expires_at', '>', now());
             })
             ->exists();
+    }
+
+    public function getVerifiedTypesAttribute()
+    {
+        return $this->verifications()
+            ->where('status', 'verified')
+            ->pluck('verification_type')
+            ->toArray();
     }
 
     public function getVerificationLevel()
@@ -110,15 +143,5 @@ class User extends Authenticatable implements MustVerifyEmail
         }
 
         return 'unverified';
-    }
-
-    public function favorites()
-    {
-        return $this->hasMany(Favorite::class);
-    }
-
-    public function favoriteProperties()
-    {
-        return $this->belongsToMany(Property::class, 'favorites');
     }
 }

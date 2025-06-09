@@ -2,22 +2,26 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Controllers\Controller;
 use App\Models\Booking;
 use App\Models\Property;
+use App\Models\Payment;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
+use App\Notifications\BookingCreated;
+use App\Notifications\BookingConfirmed;
+use App\Notifications\BookingCancelled;
+use App\Notifications\BookingCompleted;
 
 class BookingController extends Controller
 {
-    public function __construct()
-    {
-        $this->middleware('auth');
-    }
-
     public function index()
     {
+        if (!auth()->check()) {
+            return redirect()->route('login');
+        }
+
         $user = auth()->user();
 
         if ($user->user_type === 'student') {
@@ -44,7 +48,17 @@ class BookingController extends Controller
 
     public function show(Booking $booking)
     {
-        $this->authorize('view', $booking);
+        if (!auth()->check()) {
+            return redirect()->route('login');
+        }
+
+        // Check if user can view this booking
+        $user = auth()->user();
+        if ($user->user_type === 'student' && $booking->student_id !== $user->id) {
+            abort(403, 'You can only view your own bookings.');
+        } elseif ($user->user_type === 'landlord' && $booking->property->landlord_id !== $user->id) {
+            abort(403, 'You can only view bookings for your properties.');
+        }
 
         $booking->load(['property.landlord', 'property.images', 'student']);
 
@@ -53,7 +67,11 @@ class BookingController extends Controller
 
     public function create(Property $property)
     {
-        if (auth()->user()->profile->user_type !== 'student') {
+        if (!auth()->check()) {
+            return redirect()->route('login');
+        }
+
+        if (auth()->user()->user_type !== 'student') {
             return redirect()->back()->with('error', 'Only students can book properties.');
         }
 
@@ -66,8 +84,12 @@ class BookingController extends Controller
 
     public function store(Request $request)
     {
-        if (auth()->user()->profile->user_type !== 'student') {
-            return response()->json(['error' => 'Only students can book properties.'], 403);
+        if (!auth()->check()) {
+            return redirect()->route('login');
+        }
+
+        if (auth()->user()->user_type !== 'student') {
+            return redirect()->back()->with('error', 'Only students can book properties.');
         }
 
         $validated = $request->validate([
@@ -80,7 +102,7 @@ class BookingController extends Controller
         $property = Property::findOrFail($validated['property_id']);
 
         if ($property->status !== 'active') {
-            return response()->json(['error' => 'Property is not available for booking.'], 422);
+            return redirect()->back()->with('error', 'Property is not available for booking.');
         }
 
         // Check for conflicting bookings
@@ -97,7 +119,7 @@ class BookingController extends Controller
             ->exists();
 
         if ($conflictingBooking) {
-            return response()->json(['error' => 'Property is not available for the selected dates.'], 422);
+            return redirect()->back()->with('error', 'Property is not available for the selected dates.');
         }
 
         $moveInDate = Carbon::parse($validated['move_in_date']);
@@ -117,35 +139,37 @@ class BookingController extends Controller
                 'deposit_amount' => $property->deposit_amount,
                 'status' => 'pending',
                 'payment_status' => 'pending',
-                'special_requests' => $validated['special_requests'],
+                'special_requests' => $validated['special_requests'] ?? null,
             ]);
+
+            // Notify landlord about new booking
+            $property->landlord->notify(new BookingCreated($booking));
 
             DB::commit();
 
-            if ($request->expectsJson()) {
-                return response()->json($booking->load(['property', 'student']), 201);
-            }
-
             return redirect()->route('bookings.show', $booking)
-                ->with('success', 'Booking request submitted successfully!');
+                ->with('success', 'Booking request submitted successfully! The landlord will review your request.');
 
         } catch (\Exception $e) {
             DB::rollback();
-
-            if ($request->expectsJson()) {
-                return response()->json(['error' => 'Failed to create booking.'], 500);
-            }
-
-            return redirect()->back()->with('error', 'Failed to create booking.');
+            return redirect()->back()->with('error', 'Failed to create booking: ' . $e->getMessage());
         }
     }
 
-    public function confirm(Booking $booking)
+    public function confirm(Request $request, Booking $booking)
     {
-        $this->authorize('update', $booking);
+        if (!auth()->check()) {
+            return redirect()->route('login');
+        }
+
+        // Check if user can confirm this booking (landlord only)
+        $user = auth()->user();
+        if ($user->user_type !== 'landlord' || $booking->property->landlord_id !== $user->id) {
+            abort(403, 'You can only confirm bookings for your properties.');
+        }
 
         if ($booking->status !== 'pending') {
-            return response()->json(['error' => 'Booking cannot be confirmed.'], 422);
+            return redirect()->back()->with('error', 'Booking cannot be confirmed.');
         }
 
         DB::beginTransaction();
@@ -155,72 +179,164 @@ class BookingController extends Controller
                 'confirmed_at' => now(),
             ]);
 
-            // Update property status if needed
-            $booking->property->update(['status' => 'rented']);
+            // Notify student about booking confirmation
+            $booking->student->notify(new BookingConfirmed($booking));
 
             DB::commit();
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Booking confirmed successfully!',
-                'booking' => $booking->load(['property', 'student'])
-            ]);
+            return redirect()->route('bookings.show', $booking)
+                ->with('success', 'Booking confirmed successfully!');
 
         } catch (\Exception $e) {
             DB::rollback();
-            return response()->json(['error' => 'Failed to confirm booking.'], 500);
+            return redirect()->back()->with('error', 'Failed to confirm booking: ' . $e->getMessage());
         }
     }
 
-    public function cancel(Booking $booking)
+    public function cancel(Request $request, Booking $booking)
     {
-        $this->authorize('cancel', $booking);
+        if (!auth()->check()) {
+            return redirect()->route('login');
+        }
+
+        // Check if user can cancel this booking
+        $user = auth()->user();
+        if ($user->user_type === 'student' && $booking->student_id !== $user->id) {
+            abort(403, 'You can only cancel your own bookings.');
+        } elseif ($user->user_type === 'landlord' && $booking->property->landlord_id !== $user->id) {
+            abort(403, 'You can only cancel bookings for your properties.');
+        }
 
         if (!in_array($booking->status, ['pending', 'confirmed'])) {
-            return response()->json(['error' => 'Booking cannot be cancelled.'], 422);
+            return redirect()->back()->with('error', 'Booking cannot be cancelled.');
         }
+
+        $reason = $request->input('reason');
 
         DB::beginTransaction();
         try {
             $booking->update([
                 'status' => 'cancelled',
                 'cancelled_at' => now(),
+                'cancellation_reason' => $reason,
+            ]);
+
+            // Make property available again if it was rented
+            if ($booking->property->status === 'rented') {
+                $booking->property->update(['status' => 'active']);
+            }
+
+            // Notify the other party about cancellation
+            if (auth()->id() === $booking->student_id) {
+                $booking->property->landlord->notify(new BookingCancelled($booking));
+            } else {
+                $booking->student->notify(new BookingCancelled($booking));
+            }
+
+            DB::commit();
+
+            return redirect()->route('bookings.show', $booking)
+                ->with('success', 'Booking cancelled successfully.');
+
+        } catch (\Exception $e) {
+            DB::rollback();
+            return redirect()->back()->with('error', 'Failed to cancel booking: ' . $e->getMessage());
+        }
+    }
+
+    public function complete(Request $request, Booking $booking)
+    {
+        if (!auth()->check()) {
+            return redirect()->route('login');
+        }
+
+        // Check if user can complete this booking (landlord only)
+        $user = auth()->user();
+        if ($user->user_type !== 'landlord' || $booking->property->landlord_id !== $user->id) {
+            abort(403, 'You can only complete bookings for your properties.');
+        }
+
+        if ($booking->status !== 'confirmed') {
+            return redirect()->back()->with('error', 'Only confirmed bookings can be completed.');
+        }
+
+        DB::beginTransaction();
+        try {
+            $booking->update([
+                'status' => 'completed',
+                'completed_at' => now(),
             ]);
 
             // Make property available again
             $booking->property->update(['status' => 'active']);
 
+            // Notify student about booking completion
+            $booking->student->notify(new BookingCompleted($booking));
+
             DB::commit();
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Booking cancelled successfully!',
-                'booking' => $booking->load(['property', 'student'])
-            ]);
+            return redirect()->route('bookings.show', $booking)
+                ->with('success', 'Booking marked as completed successfully!');
 
         } catch (\Exception $e) {
             DB::rollback();
-            return response()->json(['error' => 'Failed to cancel booking.'], 500);
+            return redirect()->back()->with('error', 'Failed to complete booking: ' . $e->getMessage());
         }
     }
 
-    public function complete(Booking $booking)
+    public function processPayment(Request $request, Booking $booking)
     {
-        $this->authorize('update', $booking);
-
-        if ($booking->status !== 'confirmed') {
-            return response()->json(['error' => 'Only confirmed bookings can be completed.'], 422);
+        if (!auth()->check()) {
+            return redirect()->route('login');
         }
 
-        $booking->update([
-            'status' => 'completed',
-            'completed_at' => now(),
+        // Check if user can pay for this booking (student only)
+        $user = auth()->user();
+        if ($user->user_type !== 'student' || $booking->student_id !== $user->id) {
+            abort(403, 'You can only pay for your own bookings.');
+        }
+
+        if ($booking->status !== 'confirmed' || $booking->payment_status !== 'pending') {
+            return redirect()->back()->with('error', 'Payment can only be processed for confirmed bookings with pending payment.');
+        }
+
+        // Validate payment details
+        $validated = $request->validate([
+            'payment_method' => 'required|string',
+            'card_number' => 'required_if:payment_method,credit_card|string',
+            'expiry_month' => 'required_if:payment_method,credit_card|string',
+            'expiry_year' => 'required_if:payment_method,credit_card|string',
+            'cvv' => 'required_if:payment_method,credit_card|string',
         ]);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Booking marked as completed!',
-            'booking' => $booking->load(['property', 'student'])
-        ]);
+        // In a real application, this would integrate with a payment gateway like Stripe
+        // For now, we'll simulate a successful payment
+
+        DB::beginTransaction();
+        try {
+            // Create payment record
+            $payment = Payment::create([
+                'booking_id' => $booking->id,
+                'amount' => $booking->total_due,
+                'payment_method' => $validated['payment_method'],
+                'status' => 'completed',
+                'transaction_id' => 'DEMO-' . uniqid(),
+            ]);
+
+            // Update booking payment status
+            $booking->update([
+                'payment_status' => 'paid',
+                'escrow_transaction_id' => $payment->transaction_id,
+            ]);
+
+            DB::commit();
+
+            return redirect()->route('bookings.show', $booking)
+                ->with('success', 'Payment processed successfully!');
+
+        } catch (\Exception $e) {
+            DB::rollback();
+            return redirect()->back()->with('error', 'Failed to process payment: ' . $e->getMessage());
+        }
     }
 }

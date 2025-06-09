@@ -60,17 +60,19 @@ Route::middleware([
 
     // Verification routes
     Route::get('/verification', VerificationCenter::class)->name('verification.center');
+    Route::post('/verification', [VerificationController::class, 'store'])->name('verification.store');
     Route::get('/verification/success', [VerificationController::class, 'success'])->name('verification.success');
     Route::get('/verification/error', [VerificationController::class, 'error'])->name('verification.error');
 
     // Booking routes
+    Route::get('/properties/{property}/book', [BookingController::class, 'create'])->name('properties.book');
     Route::get('/bookings', [BookingController::class, 'index'])->name('bookings.index');
-    Route::get('/properties/{property}/book', [BookingController::class, 'create'])->name('bookings.create');
     Route::post('/bookings', [BookingController::class, 'store'])->name('bookings.store');
     Route::get('/bookings/{booking}', [BookingController::class, 'show'])->name('bookings.show');
     Route::put('/bookings/{booking}/confirm', [BookingController::class, 'confirm'])->name('bookings.confirm');
     Route::put('/bookings/{booking}/cancel', [BookingController::class, 'cancel'])->name('bookings.cancel');
     Route::put('/bookings/{booking}/complete', [BookingController::class, 'complete'])->name('bookings.complete');
+    Route::post('/bookings/{booking}/payment', [BookingController::class, 'processPayment'])->name('bookings.payment');
 
     // Message routes
     Route::get('/messages', [MessageController::class, 'index'])->name('messages.index');
