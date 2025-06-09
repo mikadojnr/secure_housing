@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head profile="http://selenium-ide.openqa.org/profiles/test-case">
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<link rel="selenium.base" href="http://localhost:8000/" />
+<title>Property Search Test</title>
+</head>
+<body>
+<table cellpadding="1" cellspacing="1" border="1">
+<thead>
+<tr><td rowspan="1" colspan="3">Property Search Test</td></tr>
+</thead><tbody>
+<tr>
+	<td>open</td>
+	<td>/properties</td>
+	<td></td>
+</tr>
+<tr>
+	<td>waitForPageToLoad</td>
+	<td>30000</td>
+	<td></td>
+</tr>
+<tr>
+	<td>verifyTitle</td>
+	<td>SecureHousing - Find Your Perfect Student Housing</td>
+	<td></td>
+</tr>
+<tr>
+	<td>verifyElementPresent</td>
+	<td>css=input[placeholder*="Property title"]</td>
+	<td></td>
+</tr>
+<tr>
+	<td>type</td>
+	<td>css=input[placeholder*="Property title"]</td>
+	<td>apartment</td>
+</tr>
+<tr>
+	<td>waitForElementPresent</td>
+	<td>css=.property-card</td>
+	<td></td>
+</tr>
+<tr>
+	<td>verifyElementPresent</td>
+	<td>css=.verification-badge</td>
+	<td></td>
+</tr>
+<tr>
+	<td>click</td>
+	<td>css=select[wire\:model\.live="propertyType"]</td>
+	<td></td>
+</tr>
+<tr>
+	<td>select</td>
+	<td>css=select[wire\:model\.live="propertyType"]</td>
+	<td>label=Apartment</td>
+</tr>
+<tr>
+	<td>waitForElementPresent</td>
+	<td>css=.property-card</td>
+	<td></td>
+</tr>
+<tr>
+	<td>type</td>
+	<td>css=input[wire\:model\.live\.debounce\.300ms="minPrice"]</td>
+	<td>1000</td>
+</tr>
+<tr>
+	<td>type</td>
+	<td>css=input[wire\:model\.live\.debounce\.300ms="maxPrice"]</td>
+	<td>2000</td>
+</tr>
+<tr>
+	<td>waitForElementPresent</td>
+	<td>css=.property-card</td>
+	<td></td>
+</tr>
+<tr>
+	<td>click</td>
+	<td>css=input[wire\:model\.live="verifiedOnly"]</td>
+	<td></td>
+</tr>
+<tr>
+	<td>waitForElementPresent</td>
+	<td>css=.verification-badge.verified</td>
+	<td></td>
+</tr>
+<tr>
+	<td>click</td>
+	<td>css=.property-card:first-child .btn-primary</td>
+	<td></td>
+</tr>
+<tr>
+	<td>waitForPageToLoad</td>
+	<td>30000</td>
+	<td></td>
+</tr>
+<tr>
+	<td>verifyElementPresent</td>
+	<td>css=.property-detail</td>
+	<td></td>
+</tr>
+<tr>
+	<td>verifyElementPresent</td>
+	<td>css=.verification-status-panel</td>
+	<td></td>
+</tr>
+<tr>
+	<td>verifyElementPresent</td>
+	<td>css=.trust-score</td>
+	<td></td>
+</tr>
+</tbody></table>
+</body>
+</html>

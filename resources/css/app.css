@@ -1,0 +1,275 @@
+@import "tailwindcss/base";
+@import "tailwindcss/components";
+@import "tailwindcss/utilities";
+
+/* Custom color variables */
+:root {
+  --color-primary: #4361ee;
+  --color-secondary: #4cc9f0;
+  --color-accent: #ff6b6b;
+  --color-coral-500: #ff6b6b;
+  --color-coral-600: #ff5252;
+  --color-teal-300: #4dd0e1;
+}
+
+/* Custom font families */
+.font-montserrat {
+  font-family: "Montserrat", sans-serif;
+}
+
+.font-open-sans {
+  font-family: "Open Sans", sans-serif;
+}
+
+/* Custom components */
+.btn-primary {
+  @apply bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition-colors;
+}
+
+.btn-secondary {
+  @apply bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 px-4 rounded-md transition-colors;
+}
+
+.card {
+  @apply bg-white rounded-lg shadow-sm border;
+}
+
+.verification-badge {
+  @apply inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold;
+}
+
+.verification-badge.verified {
+  @apply bg-blue-100 text-blue-800;
+}
+
+.verification-badge.pending {
+  @apply bg-yellow-100 text-yellow-800;
+}
+
+.verification-badge.rejected {
+  @apply bg-red-100 text-red-800;
+}
+
+/* Trust score styling */
+.trust-score {
+  @apply inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-white bg-opacity-90;
+}
+
+/* Property card hover effects */
+.property-card {
+  @apply transition-all duration-200 hover:shadow-lg hover:-translate-y-1;
+}
+
+/* Security indicators */
+.security-indicator {
+  @apply flex items-center space-x-1 text-sm;
+}
+
+.security-indicator.high {
+  @apply text-green-600;
+}
+
+.security-indicator.medium {
+  @apply text-yellow-600;
+}
+
+.security-indicator.low {
+  @apply text-red-600;
+}
+
+/* Loading states */
+.loading-spinner {
+  @apply animate-spin h-5 w-5 text-white;
+}
+
+/* Form styling */
+.form-input {
+  @apply w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent;
+}
+
+.form-label {
+  @apply block text-sm font-medium text-gray-700 mb-1;
+}
+
+/* Alert styling */
+.alert {
+  @apply p-4 rounded-lg border;
+}
+
+.alert.success {
+  @apply bg-green-50 border-green-200 text-green-700;
+}
+
+.alert.error {
+  @apply bg-red-50 border-red-200 text-red-700;
+}
+
+.alert.warning {
+  @apply bg-yellow-50 border-yellow-200 text-yellow-700;
+}
+
+.alert.info {
+  @apply bg-blue-50 border-blue-200 text-blue-700;
+}
+
+/* Custom scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* Responsive utilities */
+@media (max-width: 640px) {
+  .mobile-hidden {
+    display: none;
+  }
+}
+
+/* Animation utilities */
+.fade-in {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.slide-up {
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Security badge animations */
+.security-badge {
+  @apply transition-all duration-200;
+}
+
+.security-badge:hover {
+  @apply scale-105;
+}
+
+/* Property image overlay */
+.property-image-overlay {
+  @apply absolute inset-0 bg-black bg-opacity-0 transition-all duration-200;
+}
+
+.property-card:hover .property-image-overlay {
+  @apply bg-opacity-10;
+}
+
+/* Chat message styling */
+.message-bubble {
+  @apply max-w-xs lg:max-w-md px-4 py-2 rounded-lg;
+}
+
+.message-bubble.sent {
+  @apply bg-blue-600 text-white ml-auto;
+}
+
+.message-bubble.received {
+  @apply bg-gray-200 text-gray-900;
+}
+
+/* Verification progress */
+.verification-progress {
+  @apply w-full bg-gray-200 rounded-full h-2;
+}
+
+.verification-progress-bar {
+  @apply bg-blue-600 h-2 rounded-full transition-all duration-300;
+}
+
+/* Map styling */
+.map-container {
+  @apply w-full h-64 rounded-lg overflow-hidden border;
+}
+
+/* Filter sidebar */
+.filter-sidebar {
+  @apply bg-white rounded-lg shadow-sm border p-4 space-y-4;
+}
+
+/* Property amenity tags */
+.amenity-tag {
+  @apply inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700;
+}
+
+/* Booking status indicators */
+.booking-status {
+  @apply inline-flex items-center px-2 py-1 rounded-full text-xs font-medium;
+}
+
+.booking-status.pending {
+  @apply bg-yellow-100 text-yellow-800;
+}
+
+.booking-status.confirmed {
+  @apply bg-green-100 text-green-800;
+}
+
+.booking-status.cancelled {
+  @apply bg-red-100 text-red-800;
+}
+
+/* Review stars */
+.star-rating {
+  @apply flex items-center space-x-1;
+}
+
+.star {
+  @apply w-4 h-4 text-yellow-400;
+}
+
+.star.filled {
+  @apply text-yellow-500;
+}
+
+/* Responsive grid utilities */
+.property-grid {
+  @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6;
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .dark-mode {
+    @apply bg-gray-900 text-white;
+  }
+
+  .dark-mode .card {
+    @apply bg-gray-800 border-gray-700;
+  }
+
+  .dark-mode .form-input {
+    @apply bg-gray-800 border-gray-600 text-white;
+  }
+}
