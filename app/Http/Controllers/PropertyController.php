@@ -20,7 +20,6 @@ class PropertyController extends Controller
     public function show(Property $property)
     {
         $property->load(['landlord.profile', 'images', 'reviews.reviewer']);
-
         // Increment view count
         $property->increment('views_count');
 
@@ -43,7 +42,6 @@ class PropertyController extends Controller
         if (!auth()->check()) {
             return redirect()->route('login');
         }
-
         if (auth()->user()->profile->user_type !== 'landlord') {
             abort(403, 'Only landlords can create properties.');
         }
@@ -51,13 +49,14 @@ class PropertyController extends Controller
         return view('properties.create');
     }
 
+
+
     public function store(Request $request)
     {
         // Check if user is authenticated and is a landlord
         if (!auth()->check()) {
             return redirect()->route('login');
         }
-
         if (auth()->user()->profile->user_type !== 'landlord') {
             abort(403, 'Only landlords can create properties.');
         }
@@ -98,7 +97,6 @@ class PropertyController extends Controller
         if ($request->hasFile('images')) {
             foreach ($request->file('images') as $index => $image) {
                 $path = $image->store('properties', 'public');
-
                 PropertyImage::create([
                     'property_id' => $property->id,
                     'image_path' => $path,
@@ -111,6 +109,7 @@ class PropertyController extends Controller
 
         return redirect()->route('landlord.properties')
             ->with('success', 'Property created successfully!');
+
     }
 
     public function edit(Property $property)
@@ -119,7 +118,6 @@ class PropertyController extends Controller
         if (!auth()->check()) {
             return redirect()->route('login');
         }
-
         if (auth()->user()->profile->user_type !== 'landlord' || $property->landlord_id !== auth()->id()) {
             abort(403, 'Unauthorized to edit this property.');
         }
@@ -134,7 +132,6 @@ class PropertyController extends Controller
         if (!auth()->check()) {
             return redirect()->route('login');
         }
-
         if (auth()->user()->profile->user_type !== 'landlord' || $property->landlord_id !== auth()->id()) {
             abort(403, 'Unauthorized to update this property.');
         }
@@ -176,7 +173,6 @@ class PropertyController extends Controller
             $imagesToRemove = PropertyImage::whereIn('id', $request->remove_images)
                 ->where('property_id', $property->id)
                 ->get();
-
             foreach ($imagesToRemove as $image) {
                 Storage::disk('public')->delete($image->image_path);
                 $image->delete();
@@ -186,10 +182,8 @@ class PropertyController extends Controller
         // Handle new image uploads
         if ($request->hasFile('images')) {
             $existingImagesCount = $property->images()->count();
-
             foreach ($request->file('images') as $index => $image) {
                 $path = $image->store('properties', 'public');
-
                 PropertyImage::create([
                     'property_id' => $property->id,
                     'image_path' => $path,
@@ -210,7 +204,6 @@ class PropertyController extends Controller
         if (!auth()->check()) {
             return redirect()->route('login');
         }
-
         if (auth()->user()->profile->user_type !== 'landlord' || $property->landlord_id !== auth()->id()) {
             abort(403, 'Unauthorized to delete this property.');
         }
@@ -232,7 +225,6 @@ class PropertyController extends Controller
         if (!auth()->check()) {
             return redirect()->route('login');
         }
-
         if (auth()->user()->profile->user_type !== 'landlord') {
             abort(403, 'Only landlords can view this page.');
         }
@@ -249,7 +241,6 @@ class PropertyController extends Controller
     public function toggleFavorite(Property $property)
     {
         $user = auth()->user();
-
         if ($user->user_type === 'admin') {
             return response()->json(['error' => 'Admins cannot favorite properties'], 403);
         }

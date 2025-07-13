@@ -5,8 +5,8 @@ use App\Http\Controllers\PropertyController;
 use App\Http\Controllers\VerificationController;
 use App\Http\Controllers\BookingController;
 use App\Http\Controllers\MessageController;
-use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ReviewController;
+use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\AdminController;
 use App\Livewire\PropertySearch;
 use App\Livewire\VerificationCenter;
@@ -45,27 +45,36 @@ Route::middleware([
 
     // Property routes
     Route::get('/properties', PropertySearch::class)->name('properties.index');
-    Route::get('/properties/{property}', [PropertyController::class, 'show'])->name('properties.show');
-    Route::post('/properties/{property}/favorite', [PropertyController::class, 'toggleFavorite'])->name('properties.favorite');
+    Route::get('/properties/{property}', [PropertyController::class, 'show'])->name('properties.show')->where('property', '[0-9]+');
+    Route::post('/properties/{property}/favorite', [PropertyController::class, 'toggleFavorite'])->name('properties.favorite')->where('property', '[0-9]+');
 
     // Landlord routes - using custom middleware
     Route::middleware(['check.user.type:landlord'])->group(function () {
         Route::get('/my-properties', [PropertyController::class, 'myProperties'])->name('landlord.properties');
+        // Route::get('/list-property', [PropertyController::class, 'create'])->name('properties.create');
         Route::get('/properties/create', [PropertyController::class, 'create'])->name('properties.create');
         Route::post('/properties', [PropertyController::class, 'store'])->name('properties.store');
-        Route::get('/properties/{property}/edit', [PropertyController::class, 'edit'])->name('properties.edit');
-        Route::put('/properties/{property}', [PropertyController::class, 'update'])->name('properties.update');
-        Route::delete('/properties/{property}', [PropertyController::class, 'destroy'])->name('properties.destroy');
+        Route::get('/properties/{property}/edit', [PropertyController::class, 'edit'])->name('properties.edit')->where('property', '[0-9]+');
+        Route::put('/properties/{property}', [PropertyController::class, 'update'])->name('properties.update')->where('property', '[0-9]+');
+        Route::delete('/properties/{property}', [PropertyController::class, 'destroy'])->name('properties.destroy')->where('property', '[0-9]+');
     });
+
+
 
     // Verification routes
     Route::get('/verification', VerificationCenter::class)->name('verification.center');
-    Route::post('/verification', [VerificationController::class, 'store'])->name('verification.store');
     Route::get('/verification/success', [VerificationController::class, 'success'])->name('verification.success');
     Route::get('/verification/error', [VerificationController::class, 'error'])->name('verification.error');
+    Route::post('/verification/identity', [VerificationController::class, 'initiateIdentityVerification'])->name('verification.identity');
+    Route::post('/verification/student', [VerificationController::class, 'initiateStudentVerification'])->middleware('check.user.type:student')->name('verification.student');
+
+    // Verification routes
+
+
+
 
     // Booking routes
-    Route::get('/properties/{property}/book', [BookingController::class, 'create'])->name('properties.book');
+    Route::get('/properties/{property}/book', [BookingController::class, 'create'])->name('properties.book')->where('property', '[0-9]+');
     Route::get('/bookings', [BookingController::class, 'index'])->name('bookings.index');
     Route::post('/bookings', [BookingController::class, 'store'])->name('bookings.store');
     Route::get('/bookings/{booking}', [BookingController::class, 'show'])->name('bookings.show');
@@ -87,6 +96,19 @@ Route::middleware([
     // Profile routes
     Route::put('/profile/update-additional', [ProfileController::class, 'updateAdditional'])->name('profile.update-additional');
 
+    // // Admin routes
+    // Route::middleware(['check.user.type:admin'])->prefix('admin')->name('admin.')->group(function () {
+    //     Route::get('/dashboard', [AdminController::class, 'dashboard'])->name('dashboard');
+    //     Route::get('/users', [AdminController::class, 'users'])->name('admin.users');
+    //     Route::get('/properties', [AdminController::class, 'properties'])->name('admin.properties');
+    //     Route::get('/bookings', [AdminController::class, 'bookings'])->name('admin.bookings');
+    //     Route::get('/verifications', [AdminController::class, 'verifications'])->name('admin.verifications');
+    //     Route::put('/verifications/{verification}/approve', [AdminController::class, 'approveVerification'])->name('admin.verifications.approve');
+    //     Route::put('/verifications/{verification}/reject', [AdminController::class, 'rejectVerification'])->name('admin.verifications.reject');
+    //     Route::put('/users/{user}/toggle-status', [AdminController::class, 'toggleUserStatus'])->name('admin.users.toggle-status');
+    // });
+
+
     // Admin routes
     Route::middleware(['check.user.type:admin'])->prefix('admin')->name('admin.')->group(function () {
         Route::get('/dashboard', [AdminController::class, 'dashboard'])->name('dashboard');
@@ -102,3 +124,7 @@ Route::middleware([
 
 // Public verification callback
 Route::post('/verification/callback', [VerificationController::class, 'callback'])->name('verification.callback');
+
+Route::get('/debug-user', function () {
+    return auth()->check() ? auth()->user()->profile->user_type : 'guest';
+});

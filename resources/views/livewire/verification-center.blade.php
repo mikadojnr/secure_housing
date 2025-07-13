@@ -47,13 +47,12 @@
                         class="py-4 px-1 border-b-2 font-medium text-sm {{ $activeTab === 'identity' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' }}">
                     Identity Verification
                 </button>
-                @if (auth()->check() && auth()->user()->profile->user_type === 'student')
+                @if (auth()->check() && auth()->user()->profile && auth()->user()->profile->user_type === 'student')
                     <button wire:click="$set('activeTab', 'student')"
                         class="py-4 px-1 border-b-2 font-medium text-sm {{ $activeTab === 'student' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' }}">
                         Student Verification
                     </button>
                 @endif
-
             </nav>
         </div>
 
@@ -119,28 +118,96 @@
                     @endif
 
                     @if(!isset($verifications['identity']) || $verifications['identity']->first()?->status !== 'verified')
-                        <form wire:submit="initiateIdentityVerification" class="space-y-4">
+                        <form wire:submit="initiateIdentityVerification" action="{{ route('verification.identity') }}" method="POST" enctype="multipart/form-data">
+                            @csrf
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">Country</label>
                                     <select wire:model="country"
+                                            name="country"
                                             class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                                         <option value="USA">United States</option>
                                         <option value="CAN">Canada</option>
                                         <option value="GBR">United Kingdom</option>
                                         <option value="AUS">Australia</option>
                                     </select>
+                                    @error('country') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
                                 </div>
 
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">Document Type</label>
                                     <select wire:model="documentType"
+                                            name="document_type"
                                             class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                                         <option value="PASSPORT">Passport</option>
                                         <option value="DRIVING_LICENSE">Driver's License</option>
                                         <option value="ID_CARD">National ID Card</option>
                                     </select>
+                                    @error('documentType') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
                                 </div>
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Identity Document Front</label>
+                                <input type="file"
+                                       wire:model="identityDocumentFront"
+                                       name="identity_document_front"
+                                       accept=".pdf,.jpg,.jpeg,.png"
+                                       class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                <p class="text-xs text-gray-500 mt-1">Upload the front side of your ID (PDF, JPG, PNG - Max 5MB)</p>
+                                @error('identityDocumentFront') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Identity Document Back (Optional)</label>
+                                <input type="file"
+                                       wire:model="identityDocumentBack"
+                                       name="identity_document_back"
+                                       accept=".pdf,.jpg,.jpeg,.png"
+                                       class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                <p class="text-xs text-gray-500 mt-1">Upload the back side of your ID (PDF, JPG, PNG - Max 5MB)</p>
+                                @error('identityDocumentBack') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Identity Document Number</label>
+                                <input type="text"
+                                       wire:model="identityDocumentNumber"
+                                       name="identity_document_number"
+                                       placeholder="Enter document number"
+                                       class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                @error('identityDocumentNumber') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Selfie</label>
+                                <input type="file"
+                                       wire:model="selfie"
+                                       name="selfie"
+                                       accept=".jpg,.jpeg,.png"
+                                       class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                <p class="text-xs text-gray-500 mt-1">Upload a clear selfie (JPG, PNG - Max 5MB)</p>
+                                @error('selfie') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Home Town Address</label>
+                                <input type="text"
+                                       wire:model="homeTownAddress"
+                                       name="home_town_address"
+                                       placeholder="Enter your home town address"
+                                       class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                @error('homeTownAddress') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Next of Kin Name</label>
+                                <input type="text"
+                                       wire:model="nextOfKin"
+                                       name="next_of_kin"
+                                       placeholder="Enter next of kin's name"
+                                       class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                @error('nextOfKin') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
                             </div>
 
                             <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
@@ -151,10 +218,9 @@
                                     <div class="ml-3">
                                         <h3 class="text-sm font-medium text-blue-800">What to Expect</h3>
                                         <ul class="text-sm text-blue-700 mt-1 list-disc list-inside space-y-1">
-                                            <li>You'll be redirected to our secure verification partner</li>
-                                            <li>Take photos of your document and a selfie</li>
-                                            <li>Verification typically completes within 5-10 minutes</li>
-                                            <li>Your data is encrypted and securely processed</li>
+                                            <li>You'll submit your documents and details securely.</li>
+                                            <li>Verification typically completes within 5-10 minutes (in demo mode).</li>
+                                            <li>Your data is encrypted and securely processed.</li>
                                         </ul>
                                     </div>
                                 </div>
@@ -196,8 +262,8 @@
                                             Your student status has been verified
                                         @elseif($studentVerification->status === 'pending')
                                             Your student verification is being reviewed
-                                        @else
-                                            Student verification was rejected
+                                        @elseif($studentVerification->status === 'rejected')
+                                            Verification was rejected: {{ $studentVerification->rejection_reason }}
                                         @endif
                                     </p>
                                 </div>
@@ -218,15 +284,32 @@
                                 </div>
                             </div>
                         </div>
+
+                        @if($studentVerification->status === 'rejected')
+                            <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+                                <div class="flex">
+                                    <svg class="w-5 h-5 text-red-400 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
+                                    </svg>
+                                    <div class="ml-3">
+                                        <h3 class="text-sm font-medium text-red-800">Verification Failed</h3>
+                                        <p class="text-sm text-red-700 mt-1">{{ $studentVerification->rejection_reason }}</p>
+                                        <p class="text-sm text-red-700 mt-2">You can retry the verification process below.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        @endif
                     @endif
 
                     @if(!isset($verifications['student']) || $verifications['student']->first()?->status !== 'verified')
-                        <form wire:submit="initiateStudentVerification" class="space-y-4">
+                        <form wire:submit="initiateStudentVerification" action="{{ route('verification.student') }}" method="POST" enctype="multipart/form-data">
+                            @csrf
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">University</label>
                                     <input type="text"
                                            wire:model="university"
+                                           name="university"
                                            placeholder="Enter your university name"
                                            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                                     @error('university') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
@@ -236,6 +319,7 @@
                                     <label class="block text-sm font-medium text-gray-700 mb-1">Student ID</label>
                                     <input type="text"
                                            wire:model="studentId"
+                                           name="student_id"
                                            placeholder="Enter your student ID"
                                            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                                     @error('studentId') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
@@ -246,6 +330,7 @@
                                 <label class="block text-sm font-medium text-gray-700 mb-1">Enrollment Document</label>
                                 <input type="file"
                                        wire:model="enrollmentDocument"
+                                       name="enrollment_document"
                                        accept=".pdf,.jpg,.jpeg,.png"
                                        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                                 <p class="text-xs text-gray-500 mt-1">Upload your enrollment letter, transcript, or student ID card (PDF, JPG, PNG - Max 5MB)</p>

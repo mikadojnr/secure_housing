@@ -8,13 +8,14 @@ use App\Models\Booking;
 use App\Models\Verification;
 use App\Models\Review;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Controller;
 
 class AdminController extends Controller
 {
     public function __construct()
     {
         $this->middleware('auth');
-        $this->middleware('user_type:admin');
+        $this->middleware('check.user.type:admin');
     }
 
     public function dashboard()
@@ -66,26 +67,35 @@ class AdminController extends Controller
         return view('admin.verifications.index', compact('verifications'));
     }
 
-    public function updateVerification(Request $request, Verification $verification)
-    {
-        $validated = $request->validate([
-            'status' => 'required|in:verified,rejected',
-            'admin_notes' => 'nullable|string|max:1000',
-        ]);
 
+
+    public function approveVerification(Request $request, Verification $verification)
+    {
         $verification->update([
-            'status' => $validated['status'],
-            'admin_notes' => $validated['admin_notes'],
-            'verified_at' => $validated['status'] === 'verified' ? now() : null,
-            'expires_at' => $validated['status'] === 'verified' ? now()->addYears(2) : null,
+            'status' => 'verified',
+            'verified_at' => now(),
+            'expires_at' => now()->addYears(2),
             'reviewed_by' => auth()->id(),
             'reviewed_at' => now(),
         ]);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Verification ' . $validated['status'] . ' successfully!'
+        return redirect()->route('admin.verifications')->with('success', 'Verification approved successfully.');
+    }
+
+    public function rejectVerification(Request $request, Verification $verification)
+    {
+        $validated = $request->validate([
+            'rejection_reason' => 'required|string|max:1000',
         ]);
+
+        $verification->update([
+            'status' => 'rejected',
+            'rejection_reason' => $validated['rejection_reason'],
+            'reviewed_by' => auth()->id(),
+            'reviewed_at' => now(),
+        ]);
+
+        return redirect()->route('admin.verifications')->with('success', 'Verification rejected successfully.');
     }
 
     public function bookings()
@@ -104,5 +114,14 @@ class AdminController extends Controller
             ->paginate(20);
 
         return view('admin.reviews.index', compact('reviews'));
+    }
+
+    public function toggleUserStatus(Request $request, User $user)
+    {
+        $user->update([
+            'status' => $user->status === 'active' ? 'inactive' : 'active',
+        ]);
+
+        return redirect()->route('admin.users')->with('success', 'User status updated successfully.');
     }
 }

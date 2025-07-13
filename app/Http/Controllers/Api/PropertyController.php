@@ -4,8 +4,10 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Property;
+use App\Models\PropertyImage;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Storage;
 
 class PropertyController extends Controller
 {
@@ -81,6 +83,14 @@ class PropertyController extends Controller
 
     public function store(Request $request): JsonResponse
     {
+        // Check if user is authenticated and is a landlord
+        if (!auth()->check()) {
+            return response()->json(['error' => 'Unauthorized'], 401);
+        }
+        if (auth()->user()->profile->user_type !== 'landlord') {
+            return response()->json(['error' => 'Only landlords can create properties'], 403);
+        }
+
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'description' => 'required|string',
@@ -96,16 +106,34 @@ class PropertyController extends Controller
             'bathrooms' => 'required|integer|min:1',
             'max_occupants' => 'required|integer|min:1',
             'available_from' => 'required|date|after_or_equal:today',
-            'amenities' => 'array',
-            'utilities_included' => 'array',
-            'house_rules' => 'array',
+            'available_until' => 'nullable|date|after:available_from',
+            'amenities' => 'nullable|array',
+            'utilities_included' => 'nullable|array',
+            'house_rules' => 'nullable|array',
+            'images.*' => 'image|mimes:jpeg,png,jpg,gif|max:2048',
         ]);
 
-        $property = Property::create([
-            ...$validated,
-            'landlord_id' => auth()->id(),
-            'status' => 'draft',
-        ]);
+        $validated['landlord_id'] = auth()->id();
+        $validated['status'] = 'draft';
+        $validated['amenities'] = $validated['amenities'] ?? [];
+        $validated['utilities_included'] = $validated['utilities_included'] ?? [];
+        $validated['house_rules'] = $validated['house_rules'] ?? [];
+
+        $property = Property::create($validated);
+
+        // Handle image uploads
+        if ($request->hasFile('images')) {
+            foreach ($request->file('images') as $index => $image) {
+                $path = $image->store('properties', 'public');
+                PropertyImage::create([
+                    'property_id' => $property->id,
+                    'image_path' => $path,
+                    'alt_text' => $property->title,
+                    'is_primary' => $index === 0,
+                    'sort_order' => $index,
+                ]);
+            }
+        }
 
         return response()->json([
             'data' => $property,
@@ -132,13 +160,46 @@ class PropertyController extends Controller
             'bathrooms' => 'integer|min:1',
             'max_occupants' => 'integer|min:1',
             'available_from' => 'date|after_or_equal:today',
+            'available_until' => 'nullable|date|after:available_from',
             'amenities' => 'array',
             'utilities_included' => 'array',
             'house_rules' => 'array',
             'status' => 'in:draft,active,inactive',
+            'images.*' => 'image|mimes:jpeg,png,jpg,gif|max:2048',
+            'remove_images' => 'nullable|array',
         ]);
 
+        $validated['amenities'] = $validated['amenities'] ?? $property->amenities;
+        $validated['utilities_included'] = $validated['utilities_included'] ?? $property->utilities_included;
+        $validated['house_rules'] = $validated['house_rules'] ?? $property->house_rules;
+
         $property->update($validated);
+
+        // Remove selected images
+        if ($request->has('remove_images')) {
+            $imagesToRemove = PropertyImage::whereIn('id', $request->remove_images)
+                ->where('property_id', $property->id)
+                ->get();
+            foreach ($imagesToRemove as $image) {
+                Storage::disk('public')->delete($image->image_path);
+                $image->delete();
+            }
+        }
+
+        // Handle new image uploads
+        if ($request->hasFile('images')) {
+            $existingImagesCount = $property->images()->count();
+            foreach ($request->file('images') as $index => $image) {
+                $path = $image->store('properties', 'public');
+                PropertyImage::create([
+                    'property_id' => $property->id,
+                    'image_path' => $path,
+                    'alt_text' => $property->title,
+                    'is_primary' => $existingImagesCount === 0 && $index === 0,
+                    'sort_order' => $existingImagesCount + $index,
+                ]);
+            }
+        }
 
         return response()->json([
             'data' => $property,
@@ -150,6 +211,11 @@ class PropertyController extends Controller
     {
         $this->authorize('delete', $property);
 
+        // Delete associated images
+        foreach ($property->images as $image) {
+            Storage::disk('public')->delete($image->image_path);
+        }
+
         $property->delete();
 
         return response()->json([
@@ -157,4 +223,3 @@ class PropertyController extends Controller
         ]);
     }
 }
-

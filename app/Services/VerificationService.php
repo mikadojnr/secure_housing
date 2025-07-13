@@ -2,205 +2,146 @@
 
 namespace App\Services;
 
-use App\Models\User;
 use App\Models\Verification;
+use App\Models\User;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 class VerificationService
 {
-    protected $jumioApiUrl;
     protected $jumioApiToken;
     protected $jumioApiSecret;
+    protected $callbackUrl;
 
     public function __construct()
     {
-        $this->jumioApiUrl = config('services.jumio.api_url', 'https://api.jumio.com');
-        $this->jumioApiToken = config('services.jumio.api_token', 'demo_token');
-        $this->jumioApiSecret = config('services.jumio.api_secret', 'demo_secret');
+        $this->jumioApiToken = config('services.jumio.api_token');
+        $this->jumioApiSecret = config('services.jumio.api_secret');
+        $this->callbackUrl = config('services.jumio.callback_url');
     }
 
-    public function initiateIdentityVerification(User $user, array $data = [])
+    public function initiateIdentityVerification(User $user, array $data)
     {
-        try {
-            // Create verification record
+        // Check if Jumio credentials are available
+        if (!$this->jumioApiToken || !$this->jumioApiSecret) {
+            // Manual verification: Store data and mark as pending for admin review
             $verification = Verification::create([
                 'user_id' => $user->id,
                 'verification_type' => 'identity',
                 'status' => 'pending',
-                'provider' => 'jumio',
-            ]);
-
-            // For demo purposes, we'll simulate the verification process
-            if (config('app.env') === 'local' || !$this->jumioApiToken || $this->jumioApiToken === 'demo_token') {
-                // Simulate verification process for demo
-                $verification->update([
-                    'external_id' => 'demo_' . $verification->id,
-                    'verification_data' => [
-                        'demo' => true,
-                        'country' => $data['country'] ?? 'USA',
-                        'document_type' => $data['document_type'] ?? 'PASSPORT'
-                    ],
-                    'status' => 'verified',
-                    'verified_at' => now(),
-                    'expires_at' => now()->addYears(2),
-                ]);
-
-                $this->updateUserTrustScore($user);
-
-                return [
-                    'success' => true,
-                    'verification_id' => $verification->id,
-                    'message' => 'Identity verification completed successfully (Demo Mode)',
-                ];
-            }
-
-            // Real Jumio API call would go here
-            $response = Http::withBasicAuth($this->jumioApiToken, $this->jumioApiSecret)
-                ->post($this->jumioApiUrl . '/initiate', [
-                    'customerInternalReference' => $user->id,
-                    'userReference' => $verification->id,
-                    'successUrl' => route('verification.success'),
-                    'errorUrl' => route('verification.error'),
-                    'callbackUrl' => route('verification.callback'),
-                    'enabledFields' => 'idNumber,idFirstName,idLastName,idDob,idExpiry,idUsState,idPersonalNumber,idFaceMatch',
-                    'presets' => [
-                        'index' => 1,
-                        'country' => $data['country'] ?? 'USA',
-                        'type' => $data['document_type'] ?? 'PASSPORT'
-                    ]
-                ]);
-
-            if ($response->successful()) {
-                $responseData = $response->json();
-
-                $verification->update([
-                    'external_id' => $responseData['transactionReference'],
-                    'verification_data' => $responseData,
-                ]);
-
-                return [
-                    'success' => true,
-                    'verification_id' => $verification->id,
-                    'redirect_url' => $responseData['redirectUrl'],
-                ];
-            }
-
-            throw new \Exception('Failed to initiate verification: ' . $response->body());
-
-        } catch (\Exception $e) {
-            Log::error('Verification initiation failed', [
-                'user_id' => $user->id,
-                'error' => $e->getMessage(),
+                'provider' => 'manual',
+                'verification_data' => [
+                    'country' => $data['country'],
+                    'document_type' => $data['document_type'],
+                    'identity_document_front_path' => $data['identity_document_front_path'],
+                    'identity_document_back_path' => $data['identity_document_back_path'],
+                    'identity_document_number' => $data['identity_document_number'],
+                    'selfie_path' => $data['selfie_path'],
+                    'home_town_address' => $data['home_town_address'],
+                    'next_of_kin' => $data['next_of_kin'],
+                ],
             ]);
 
             return [
-                'success' => false,
-                'error' => $e->getMessage(),
+                'success' => true,
+                'message' => 'Identity verification submitted for manual review.',
+                'verification_id' => $verification->id,
             ];
         }
-    }
 
-    public function handleCallback(array $callbackData)
-    {
+        // Jumio integration
         try {
-            $verification = Verification::where('external_id', $callbackData['transactionReference'])
-                ->first();
+            $response = Http::withBasicAuth($this->jumioApiToken, $this->jumioApiSecret)
+                ->post('https://api.jumio.com/api/v3/scans', [
+                    'customerInternalReference' => $user->id,
+                    'callbackUrl' => $this->callbackUrl,
+                    'country' => $data['country'],
+                    'type' => $data['document_type'],
+                    'idNumber' => $data['identity_document_number'],
+                    'frontsideImage' => base64_encode(Storage::disk('private')->get($data['identity_document_front_path'])),
+                    'backsideImage' => $data['identity_document_back_path'] ? base64_encode(Storage::disk('private')->get($data['identity_document_back_path'])) : null,
+                    'faceImage' => base64_encode(Storage::disk('private')->get($data['selfie_path'])),
+                ]);
 
-            if (!$verification) {
-                throw new \Exception('Verification not found');
+            if ($response->successful()) {
+                $result = $response->json();
+                $verification = Verification::create([
+                    'user_id' => $user->id,
+                    'verification_type' => 'identity',
+                    'status' => 'pending',
+                    'provider' => 'jumio',
+                    'external_id' => $result['scanReference'] ?? null,
+                    'verification_data' => $data,
+                ]);
+
+                return [
+                    'success' => true,
+                    'message' => 'Identity verification initiated with Jumio.',
+                    'verification_id' => $verification->id,
+                    'redirect_url' => $result['redirectUrl'] ?? null,
+                ];
             }
 
-            $status = $this->mapJumioStatus($callbackData['transactionStatus']);
-
-            $verification->update([
-                'status' => $status,
-                'verification_data' => array_merge(
-                    $verification->verification_data ?? [],
-                    $callbackData
-                ),
-                'verified_at' => $status === 'verified' ? now() : null,
-                'expires_at' => $status === 'verified' ? now()->addYears(2) : null,
-                'rejection_reason' => $status === 'rejected' ? $callbackData['rejectReason'] ?? null : null,
-            ]);
-
-            // Update user trust score
-            if ($status === 'verified') {
-                $this->updateUserTrustScore($verification->user);
-            }
-
-            return $verification;
-
+            return [
+                'success' => false,
+                'error' => 'Failed to initiate Jumio verification: ' . ($response->json()['error'] ?? 'Unknown error'),
+            ];
         } catch (\Exception $e) {
-            Log::error('Verification callback handling failed', [
-                'callback_data' => $callbackData,
-                'error' => $e->getMessage(),
-            ]);
-
-            throw $e;
+            Log::error('Jumio verification failed', ['error' => $e->getMessage()]);
+            return [
+                'success' => false,
+                'error' => 'Failed to initiate Jumio verification: ' . $e->getMessage(),
+            ];
         }
     }
 
     public function initiateStudentVerification(User $user, array $data)
     {
-        try {
-            $verification = Verification::create([
-                'user_id' => $user->id,
-                'verification_type' => 'student',
-                'status' => 'pending',
-                'provider' => 'manual',
-                'verification_data' => $data,
-            ]);
+        // Manual verification: Store data and mark as pending for admin review
+        $verification = Verification::create([
+            'user_id' => $user->id,
+            'verification_type' => 'student',
+            'status' => 'pending',
+            'provider' => 'manual',
+            'verification_data' => [
+                'university' => $data['university'],
+                'student_id' => $data['student_id'],
+                'document_path' => $data['document_path'],
+            ],
+        ]);
 
-            // In a real implementation, you would integrate with university APIs
-            // or use document verification services
-
-            // For demo purposes, we'll auto-verify if student ID is provided
-            if (!empty($data['student_id']) && !empty($data['university'])) {
-                $verification->update([
-                    'status' => 'verified',
-                    'verified_at' => now(),
-                    'expires_at' => now()->addYear(),
-                ]);
-
-                $this->updateUserTrustScore($user);
-            }
-
-            return $verification;
-
-        } catch (\Exception $e) {
-            Log::error('Student verification failed', [
-                'user_id' => $user->id,
-                'error' => $e->getMessage(),
-            ]);
-
-            throw $e;
-        }
+        return $verification;
     }
 
-    protected function mapJumioStatus($jumioStatus)
+    public function handleCallback(array $payload)
     {
-        return match ($jumioStatus) {
-            'DONE' => 'verified',
-            'FAILED' => 'rejected',
-            'EXPIRED' => 'expired',
+        // Handle Jumio callback
+        $scanReference = $payload['scanReference'] ?? null;
+        if (!$scanReference) {
+            throw new \Exception('Invalid callback payload: Missing scanReference');
+        }
+
+        $verification = Verification::where('external_id', $scanReference)->firstOrFail();
+
+        // Update verification status based on Jumio response
+        $status = $payload['verificationStatus'] ?? 'PENDING';
+        $mappedStatus = match ($status) {
+            'APPROVED_VERIFIED' => 'verified',
+            'DENIED_FRAUD', 'DENIED_REJECTED' => 'rejected',
             default => 'pending',
         };
-    }
 
-    protected function updateUserTrustScore(User $user)
-    {
-        $verifications = $user->verifications()
-            ->where('status', 'verified')
-            ->pluck('verification_type')
-            ->toArray();
+        $verification->update([
+            'status' => $mappedStatus,
+            'rejection_reason' => $payload['rejectReason'] ?? null,
+            'verified_at' => $mappedStatus === 'verified' ? now() : null,
+            'expires_at' => $mappedStatus === 'verified' ? now()->addYear() : null,
+            'verification_data' => array_merge($verification->verification_data, [
+                'callback_data' => $payload,
+            ]),
+        ]);
 
-        $score = 0;
-        if (in_array('identity', $verifications)) $score += 0.5;
-        if (in_array('student', $verifications)) $score += 0.3;
-        if (in_array('landlord', $verifications)) $score += 0.2;
-
-        // Update user's properties trust scores
-        $user->properties()->update(['trust_score' => $score]);
+        return $verification;
     }
 }

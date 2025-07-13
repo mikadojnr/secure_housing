@@ -13,14 +13,18 @@ class VerificationCenter extends Component
     public $activeTab = 'identity';
     public $country = 'USA';
     public $documentType = 'PASSPORT';
+    public $identityDocumentFront;
+    public $identityDocumentBack;
+    public $identityDocumentNumber;
+    public $selfie;
+    public $homeTownAddress;
+    public $nextOfKin;
     public $university = '';
     public $studentId = '';
     public $enrollmentDocument;
     public $isLoading = false;
-    public $identityDocument;
 
     protected $layout = 'components.layouts.app';
-
     protected $verificationService;
 
     public function boot(VerificationService $verificationService)
@@ -30,64 +34,83 @@ class VerificationCenter extends Component
 
     public function mount()
     {
-        // Set default tab based on user type
-        if (auth()->user()->user_type === 'student') {
-            $this->activeTab = 'identity';
+        if (auth()->user()->profile && auth()->user()->profile->user_type === 'student') {
+            $this->activeTab = 'student';
         } else {
             $this->activeTab = 'identity';
         }
     }
 
-    public function initiateIdentityVerification()
+    protected function rules()
     {
-        $this->validate([
+        return [
             'country' => 'required|string|size:3',
             'documentType' => 'required|in:PASSPORT,DRIVING_LICENSE,ID_CARD',
-            'identityDocument' => 'required|file|mimes:pdf,jpg,jpeg,png|max:5120',
-        ]);
+            'identityDocumentFront' => 'required|file|mimes:pdf,jpg,jpeg,png|max:5120',
+            'identityDocumentBack' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
+            'identityDocumentNumber' => 'required|string|max:255',
+            'selfie' => 'required|file|mimes:jpg,jpeg,png|max:5120',
+            'homeTownAddress' => 'required|string|max:255',
+            'nextOfKin' => 'required|string|max:255',
+            'university' => 'required_if:activeTab,student|string',
+            'studentId' => 'required_if:activeTab,student|string',
+            'enrollmentDocument' => 'required_if:activeTab,student|file|mimes:pdf,jpg,jpeg,png|max:5120',
+        ];
+    }
+
+    public function initiateIdentityVerification()
+    {
+        $this->validate();
 
         $this->isLoading = true;
 
         try {
-            $documentPath = $this->identityDocument->store('verification-documents', 'private');
+            $documentFrontPath = $this->identityDocumentFront->store('verification-documents', 'private');
+            $documentBackPath = $this->identityDocumentBack ? $this->identityDocumentBack->store('verification-documents', 'private') : null;
+            $selfiePath = $this->selfie->store('verification-documents', 'private');
 
             $result = $this->verificationService->initiateIdentityVerification(
                 auth()->user(),
                 [
                     'country' => $this->country,
                     'document_type' => $this->documentType,
-                    'document_path' => $documentPath,
+                    'identity_document_front_path' => $documentFrontPath,
+                    'identity_document_back_path' => $documentBackPath,
+                    'identity_document_number' => $this->identityDocumentNumber,
+                    'selfie_path' => $selfiePath,
+                    'home_town_address' => $this->homeTownAddress,
+                    'next_of_kin' => $this->nextOfKin,
                 ]
             );
 
             $this->isLoading = false;
-            $this->reset(['identityDocument']);
+            $this->reset([
+                'identityDocumentFront',
+                'identityDocumentBack',
+                'identityDocumentNumber',
+                'selfie',
+                'homeTownAddress',
+                'nextOfKin',
+            ]);
 
             if ($result['success']) {
                 session()->flash('success', $result['message'] ?? 'Identity verification submitted successfully!');
+                if (isset($result['redirect_url'])) {
+                    return redirect()->to($result['redirect_url']);
+                }
                 $this->dispatch('verification-updated');
             } else {
                 session()->flash('error', $result['error']);
             }
         } catch (\Exception $e) {
             $this->isLoading = false;
-            session()->flash('error', 'Failed to submit identity verification.');
+            session()->flash('error', 'Failed to submit identity verification: ' . $e->getMessage());
         }
     }
 
     public function initiateStudentVerification()
     {
-        // Only allow students to access this
-        if (auth()->user()->user_type !== 'student') {
-            session()->flash('error', 'Student verification is only available for student accounts.');
-            return;
-        }
-
-        $this->validate([
-            'university' => 'required|string',
-            'studentId' => 'required|string',
-            'enrollmentDocument' => 'required|file|mimes:pdf,jpg,jpeg,png|max:5120',
-        ]);
+        $this->validate();
 
         $this->isLoading = true;
 
@@ -108,10 +131,9 @@ class VerificationCenter extends Component
 
             session()->flash('success', 'Student verification submitted successfully!');
             $this->dispatch('verification-updated');
-
         } catch (\Exception $e) {
             $this->isLoading = false;
-            session()->flash('error', 'Failed to submit student verification.');
+            session()->flash('error', 'Failed to submit student verification: ' . $e->getMessage());
         }
     }
 

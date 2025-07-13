@@ -235,10 +235,15 @@
                     @endif
 
                     <div class="space-y-3">
-                        <a href="{{ route('messages.show', ['user' => $property->landlord, 'property_id' => $property->id]) }}"
-                           class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-md text-center font-medium transition-colors block">
-                            Send Message
-                        </a>
+
+                        @if (auth()->user()->id != $property->landlord_id)
+                            <a href="{{ route('messages.show', ['user' => $property->landlord, 'property_id' => $property->id]) }}"
+                                class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-md text-center font-medium transition-colors block">
+                                Send Message
+                            </a>
+                        @endif
+
+
 
                         @auth
                             @if(auth()->user()->profile && auth()->user()->profile->user_type === 'student')

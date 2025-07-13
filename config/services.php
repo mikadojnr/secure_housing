@@ -32,9 +32,9 @@ return [
     ],
 
     'jumio' => [
-        'api_url' => env('JUMIO_API_URL', 'https://netverify.com/api/netverify/v2'),
         'api_token' => env('JUMIO_API_TOKEN'),
         'api_secret' => env('JUMIO_API_SECRET'),
+        'callback_url' => env('JUMIO_CALLBACK_URL', 'http://localhost:8000/api/verification/callback'),
     ],
 
     'onfido' => [
