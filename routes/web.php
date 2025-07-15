@@ -51,7 +51,6 @@ Route::middleware([
     // Landlord routes - using custom middleware
     Route::middleware(['check.user.type:landlord'])->group(function () {
         Route::get('/my-properties', [PropertyController::class, 'myProperties'])->name('landlord.properties');
-        // Route::get('/list-property', [PropertyController::class, 'create'])->name('properties.create');
         Route::get('/properties/create', [PropertyController::class, 'create'])->name('properties.create');
         Route::post('/properties', [PropertyController::class, 'store'])->name('properties.store');
         Route::get('/properties/{property}/edit', [PropertyController::class, 'edit'])->name('properties.edit')->where('property', '[0-9]+');
@@ -59,19 +58,12 @@ Route::middleware([
         Route::delete('/properties/{property}', [PropertyController::class, 'destroy'])->name('properties.destroy')->where('property', '[0-9]+');
     });
 
-
-
     // Verification routes
     Route::get('/verification', VerificationCenter::class)->name('verification.center');
     Route::get('/verification/success', [VerificationController::class, 'success'])->name('verification.success');
     Route::get('/verification/error', [VerificationController::class, 'error'])->name('verification.error');
     Route::post('/verification/identity', [VerificationController::class, 'initiateIdentityVerification'])->name('verification.identity');
     Route::post('/verification/student', [VerificationController::class, 'initiateStudentVerification'])->middleware('check.user.type:student')->name('verification.student');
-
-    // Verification routes
-
-
-
 
     // Booking routes
     Route::get('/properties/{property}/book', [BookingController::class, 'create'])->name('properties.book')->where('property', '[0-9]+');
@@ -96,19 +88,6 @@ Route::middleware([
     // Profile routes
     Route::put('/profile/update-additional', [ProfileController::class, 'updateAdditional'])->name('profile.update-additional');
 
-    // // Admin routes
-    // Route::middleware(['check.user.type:admin'])->prefix('admin')->name('admin.')->group(function () {
-    //     Route::get('/dashboard', [AdminController::class, 'dashboard'])->name('dashboard');
-    //     Route::get('/users', [AdminController::class, 'users'])->name('admin.users');
-    //     Route::get('/properties', [AdminController::class, 'properties'])->name('admin.properties');
-    //     Route::get('/bookings', [AdminController::class, 'bookings'])->name('admin.bookings');
-    //     Route::get('/verifications', [AdminController::class, 'verifications'])->name('admin.verifications');
-    //     Route::put('/verifications/{verification}/approve', [AdminController::class, 'approveVerification'])->name('admin.verifications.approve');
-    //     Route::put('/verifications/{verification}/reject', [AdminController::class, 'rejectVerification'])->name('admin.verifications.reject');
-    //     Route::put('/users/{user}/toggle-status', [AdminController::class, 'toggleUserStatus'])->name('admin.users.toggle-status');
-    // });
-
-
     // Admin routes
     Route::middleware(['check.user.type:admin'])->prefix('admin')->name('admin.')->group(function () {
         Route::get('/dashboard', [AdminController::class, 'dashboard'])->name('dashboard');
@@ -116,9 +95,23 @@ Route::middleware([
         Route::get('/properties', [AdminController::class, 'properties'])->name('properties');
         Route::get('/bookings', [AdminController::class, 'bookings'])->name('bookings');
         Route::get('/verifications', [AdminController::class, 'verifications'])->name('verifications');
+        Route::get('/verifications/{verification}/show', [AdminController::class, 'showVerification'])->name('verifications.show');
+        Route::put('/verifications/{verification}/update', [AdminController::class, 'updateVerification'])->name('verifications.update');
         Route::put('/verifications/{verification}/approve', [AdminController::class, 'approveVerification'])->name('verifications.approve');
         Route::put('/verifications/{verification}/reject', [AdminController::class, 'rejectVerification'])->name('verifications.reject');
         Route::put('/users/{user}/toggle-status', [AdminController::class, 'toggleUserStatus'])->name('users.toggle-status');
+        Route::get('/verification-documents/download/{verification}/{documentType}', [AdminController::class, 'downloadVerificationDocument'])->name('verification-documents.download');
+
+        // Route to serve private verification documents
+        Route::get('/verification-documents/{path}', function ($path) {
+            $fullPath = 'verification-documents/' . $path;
+
+            if (!Storage::disk('private')->exists($fullPath)) {
+                abort(404);
+            }
+
+            return Storage::disk('private')->response($fullPath);
+        })->name('verification-documents.show')->where('path', '.*');
     });
 });
 

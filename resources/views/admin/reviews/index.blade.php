@@ -1,11 +1,10 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Admin Reviews</title>
-    @livewireStyles
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
-</head>
-<body>
+<x-app>
+    <x-slot name="header">
+        <h2 class="font-semibold text-xl text-gray-800 leading-tight">
+            {{ __('Reviews Management') }}
+        </h2>
+    </x-slot>
+
     <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div class="bg-white rounded-lg shadow-sm border">
             <div class="border-b border-gray-200 px-6 py-4">
@@ -37,6 +36,4 @@
             </div>
         </div>
     </div>
-    @livewireScripts
-</body>
-</html>
+</x-app>

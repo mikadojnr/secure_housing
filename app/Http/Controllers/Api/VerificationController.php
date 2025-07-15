@@ -21,48 +21,39 @@ class VerificationController extends Controller
     {
         $user = Auth::user();
         $data = $request->validate([
-            'country' => 'required|string|size:3',
-            'document_type' => 'required|in:PASSPORT,DRIVING_LICENSE,ID_CARD',
+            'country' => 'required|string|max:255',
+            'document_type' => 'required|in:international_passport,drivers_license,national_identity_number,voters_card',
+            'identity_document_number' => 'required|string|max:255',
+            'home_town_address' => 'required|string|max:500',
+            'next_of_kin' => 'nullable|string|max:255',
             'identity_document_front' => 'required|file|mimes:pdf,jpg,jpeg,png|max:5120',
             'identity_document_back' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
-            'identity_document_number' => 'required|string|max:255',
             'selfie' => 'required|file|mimes:jpg,jpeg,png|max:5120',
-            'home_town_address' => 'required|string|max:255',
-            'next_of_kin' => 'required|string|max:255',
         ]);
 
         try {
-            $documentFrontPath = $request->file('identity_document_front')
-                ->store('verification-documents', 'private');
-            $documentBackPath = $request->file('identity_document_back')
-                ? $request->file('identity_document_back')->store('verification-documents', 'private')
-                : null;
-            $selfiePath = $request->file('selfie')
-                ->store('verification-documents', 'private');
-
+            // Pass the validated data directly, including file instances from the request
             $result = $this->verificationService->initiateIdentityVerification(
                 $user,
                 [
                     'country' => $data['country'],
                     'document_type' => $data['document_type'],
-                    'identity_document_front_path' => $documentFrontPath,
-                    'identity_document_back_path' => $documentBackPath,
                     'identity_document_number' => $data['identity_document_number'],
-                    'selfie_path' => $selfiePath,
                     'home_town_address' => $data['home_town_address'],
                     'next_of_kin' => $data['next_of_kin'],
+                    'identity_document_front' => $request->file('identity_document_front'),
+                    'identity_document_back' => $request->file('identity_document_back'),
+                    'selfie' => $request->file('selfie'),
                 ]
             );
 
-            if ($result['success']) {
-                return response()->json([
-                    'message' => $result['message'] ?? 'Identity verification initiated successfully.',
-                    'verification_id' => $result['verification_id'],
-                    'redirect_url' => $result['redirect_url'] ?? null,
-                ]);
-            }
+            // The service now returns the Verification model directly, or throws an exception
+            return response()->json([
+                'message' => 'Identity verification initiated successfully.',
+                'verification_id' => $result->id,
+                'status' => $result->status,
+            ]);
 
-            return response()->json(['error' => $result['error']], 500);
         } catch (\Exception $e) {
             return response()->json([
                 'error' => 'Failed to initiate identity verification: ' . $e->getMessage(),
@@ -76,15 +67,25 @@ class VerificationController extends Controller
         $data = $request->validate([
             'university' => 'required|string',
             'student_id' => 'required|string',
+            'enrollment_year' => 'required|integer|min:1900|max:' . (date('Y') + 2),
+            'degree_program' => 'required|string',
             'enrollment_document' => 'required|file|mimes:pdf,jpg,jpeg,png|max:5120',
+            'student_id_card' => 'nullable|file|mimes:jpg,jpeg,png|max:2048',
         ]);
 
         try {
-            // Handle file upload
-            $documentPath = $request->file('enrollment_document')
-                ->store('verification-documents', 'private');
-
-            $verification = $this->verificationService->initiateStudentVerification($user, $data);
+            // Pass the validated data directly, including file instances from the request
+            $verification = $this->verificationService->initiateStudentVerification(
+                $user,
+                [
+                    'university' => $data['university'],
+                    'student_id' => $data['student_id'],
+                    'enrollment_year' => $data['enrollment_year'],
+                    'degree_program' => $data['degree_program'],
+                    'enrollment_document' => $request->file('enrollment_document'),
+                    'student_id_card' => $request->file('student_id_card'),
+                ]
+            );
 
             return response()->json([
                 'message' => 'Student verification initiated successfully.',
@@ -93,7 +94,7 @@ class VerificationController extends Controller
             ]);
 
         } catch (\Exception $e) {
-            return response()->json(['error' => 'Failed to initiate student verification'], 400);
+            return response()->json(['error' => 'Failed to initiate student verification: ' . $e->getMessage()], 400);
         }
     }
 
@@ -104,12 +105,11 @@ class VerificationController extends Controller
         Log::info('Verification callback received', $request->all());
 
         try {
-            $verification = $this->verificationService->handleCallback($request->all());
+            // Assuming handleJumioCallback is the correct method for external callbacks
+            $this->verificationService->handleJumioCallback($request); // Pass the full request object
 
             return response()->json([
                 'message' => 'Callback processed successfully.',
-                'verification_id' => $verification->id,
-                'status' => $verification->status,
             ]);
         } catch (\Exception $e) {
             Log::error('Error processing verification callback: ' . $e->getMessage(), ['payload' => $request->all()]);
@@ -132,6 +132,7 @@ class VerificationController extends Controller
                     'verified_at' => $v->verified_at,
                     'expires_at' => $v->expires_at,
                     'rejection_reason' => $v->rejection_reason,
+                    'verification_data' => $v->verification_data, // Include full data for API
                 ];
             }),
         ]);

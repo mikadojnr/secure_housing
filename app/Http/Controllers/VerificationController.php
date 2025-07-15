@@ -20,47 +20,20 @@ class VerificationController extends Controller
     {
         $user = Auth::user();
         $data = $request->validate([
-            'country' => 'required|string|size:3',
-            'document_type' => 'required|in:PASSPORT,DRIVING_LICENSE,ID_CARD',
+            'country' => 'required|string|max:255',
+            'document_type' => 'required|in:international_passport,drivers_license,national_identity_number,voters_card',
+            'identity_document_number' => 'required|string|max:255',
             'identity_document_front' => 'required|file|mimes:pdf,jpg,jpeg,png|max:5120',
             'identity_document_back' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
-            'identity_document_number' => 'required|string|max:255',
             'selfie' => 'required|file|mimes:jpg,jpeg,png|max:5120',
-            'home_town_address' => 'required|string|max:255',
-            'next_of_kin' => 'required|string|max:255',
         ]);
 
         try {
-            $documentFrontPath = $request->file('identity_document_front')
-                ->store('verification-documents', 'private');
-            $documentBackPath = $request->file('identity_document_back')
-                ? $request->file('identity_document_back')->store('verification-documents', 'private')
-                : null;
-            $selfiePath = $request->file('selfie')
-                ->store('verification-documents', 'private');
-
-            $result = $this->verificationService->initiateIdentityVerification(
-                $user,
-                [
-                    'country' => $data['country'],
-                    'document_type' => $data['document_type'],
-                    'identity_document_front_path' => $documentFrontPath,
-                    'identity_document_back_path' => $documentBackPath,
-                    'identity_document_number' => $data['identity_document_number'],
-                    'selfie_path' => $selfiePath,
-                    'home_town_address' => $data['home_town_address'],
-                    'next_of_kin' => $data['next_of_kin'],
-                ]
-            );
-
-            if ($result['success']) {
-                return redirect()->route('verification.success')->with('success', $result['message'] ?? 'Identity verification initiated successfully.');
-            }
-
-            return redirect()->route('verification.error')->with('error', $result['error']);
+            $verification = $this->verificationService->initiateIdentityVerification($user, $data);
+            return redirect()->route('verification.success')->with('success', 'Identity verification initiated successfully.');
         } catch (\Exception $e) {
             Log::error('Identity verification failed', ['error' => $e->getMessage()]);
-            return redirect()->route('verification.error')->with('error', 'Failed to initiate identity verification.');
+            return redirect()->route('verification.error')->with('error', 'Failed to initiate identity verification: ' . $e->getMessage());
         }
     }
 
@@ -72,25 +45,20 @@ class VerificationController extends Controller
         }
 
         $data = $request->validate([
-            'university' => 'required|string',
-            'student_id' => 'required|string',
-            'enrollment_document' => 'required|file|mimes:pdf,jpg,jpeg,png|max:5120',
+            'university' => 'required|string|max:255',
+            'student_id' => 'required|string|max:255',
+            'enrollment_year' => 'nullable|integer|min:2000|max:2030',
+            'degree_program' => 'nullable|string|max:255',
+            'enrollment_document' => 'required|file|mimes:pdf,jpg,jpeg,png|max:10240',
+            'student_id_card' => 'nullable|file|mimes:jpg,jpeg,png|max:5120',
         ]);
 
         try {
-            $documentPath = $request->file('enrollment_document')
-                ->store('verification-documents', 'private');
-
-            $verification = $this->verificationService->initiateStudentVerification($user, [
-                'university' => $data['university'],
-                'student_id' => $data['student_id'],
-                'document_path' => $documentPath,
-            ]);
-
+            $verification = $this->verificationService->initiateStudentVerification($user, $data);
             return redirect()->route('verification.success')->with('success', 'Student verification submitted successfully.');
         } catch (\Exception $e) {
             Log::error('Student verification failed', ['error' => $e->getMessage()]);
-            return redirect()->route('verification.error')->with('error', 'Failed to submit student verification.');
+            return redirect()->route('verification.error')->with('error', 'Failed to submit student verification: ' . $e->getMessage());
         }
     }
 
@@ -106,22 +74,17 @@ class VerificationController extends Controller
 
     public function callback(Request $request)
     {
-        try {
-            $verification = $this->verificationService->handleCallback($request->all());
+        Log::info('Verification callback received (Web Controller)', $request->all());
 
+        try {
+            $this->verificationService->handleJumioCallback($request);
             return response()->json([
-                'status' => 'success',
-                'verification_status' => $verification->status,
+                'message' => 'Verification status updated via callback',
             ]);
         } catch (\Exception $e) {
-            Log::error('Verification callback failed', [
-                'request' => $request->all(),
-                'error' => $e->getMessage(),
-            ]);
-
+            Log::error('Error processing verification callback (Web Controller): ' . $e->getMessage(), ['payload' => $request->all()]);
             return response()->json([
-                'status' => 'error',
-                'message' => 'Failed to process verification callback',
+                'error' => 'Failed to process verification callback',
             ], 400);
         }
     }

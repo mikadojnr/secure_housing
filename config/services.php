@@ -31,12 +31,6 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
-    'jumio' => [
-        'api_token' => env('JUMIO_API_TOKEN'),
-        'api_secret' => env('JUMIO_API_SECRET'),
-        'callback_url' => env('JUMIO_CALLBACK_URL', 'http://localhost:8000/api/verification/callback'),
-    ],
-
     'onfido' => [
         'api_url' => env('ONFIDO_API_URL', 'https://api.onfido.com/v3'),
         'api_token' => env('ONFIDO_API_TOKEN'),
@@ -53,6 +47,13 @@ return [
         'app_key' => env('PUSHER_APP_KEY'),
         'app_secret' => env('PUSHER_APP_SECRET'),
         'app_cluster' => env('PUSHER_APP_CLUSTER'),
+    ],
+
+    'jumio' => [
+        'api_token' => env('JUMIO_API_TOKEN'),
+        'api_secret' => env('JUMIO_API_SECRET'),
+        'callback_url' => env('JUMIO_CALLBACK_URL', env('APP_URL') . '/verification/callback'),
+        'base_url' => env('JUMIO_BASE_URL', 'https://netverify.com/api/netverify/v2'),
     ],
 
 ];

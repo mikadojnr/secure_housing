@@ -9,6 +9,7 @@ use Illuminate\Notifications\Notifiable;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 use Laravel\Jetstream\HasProfilePhoto;
 use Laravel\Sanctum\HasApiTokens;
+use Illuminate\Support\Facades\Log;
 
 class User extends Authenticatable implements MustVerifyEmail
 {
@@ -59,6 +60,39 @@ class User extends Authenticatable implements MustVerifyEmail
         'profile_photo_url',
     ];
 
+    /**
+     * The "booted" method of the model.
+     */
+    protected static function booted(): void
+    {
+        static::created(function (User $user) {
+            // Automatically create user profile when user is created
+            $user->profile()->create([
+                'user_type' => 'student', // Default to student
+                'preferences' => json_encode([
+                    'notifications' => [
+                        'email_bookings' => true,
+                        'email_messages' => true,
+                        'email_reviews' => true,
+                        'sms_bookings' => false,
+                        'sms_messages' => false,
+                    ],
+                    'privacy' => [
+                        'show_phone' => false,
+                        'show_email' => false,
+                        'show_university' => true,
+                    ],
+                    'search' => [
+                        'max_price' => 1000,
+                        'preferred_areas' => [],
+                        'property_types' => [],
+                        'amenities' => [],
+                    ]
+                ])
+            ]);
+        });
+    }
+
     public function profile()
     {
         return $this->hasOne(UserProfile::class);
@@ -106,7 +140,7 @@ class User extends Authenticatable implements MustVerifyEmail
 
     public function getUserTypeAttribute()
     {
-        return $this->profile->user_type ?? null;
+        return $this->profile->user_type ?? 'student';
     }
 
     public function isVerified($verificationType = 'identity')
@@ -143,5 +177,101 @@ class User extends Authenticatable implements MustVerifyEmail
         }
 
         return 'unverified';
+    }
+
+    /**
+     * Get the user's trust score based on verifications and activity
+     */
+    public function getTrustScoreAttribute()
+    {
+        $score = 0;
+
+        // Base score for email verification
+        if ($this->hasVerifiedEmail()) {
+            $score += 20;
+        }
+
+        // Score for identity verification
+        if ($this->isVerified('identity')) {
+            $score += 40;
+        }
+
+        // Score for student verification
+        if ($this->isVerified('student')) {
+            $score += 30;
+        }
+
+        // Score for having a complete profile
+        if ($this->profile && $this->profile->isComplete()) {
+            $score += 10;
+        }
+
+        return min($score, 100); // Cap at 100
+    }
+
+    /**
+     * Check if user is a student
+     */
+    public function isStudent()
+    {
+        return $this->getUserTypeAttribute() === 'student';
+    }
+
+    /**
+     * Check if user is a landlord
+     */
+    public function isLandlord()
+    {
+        return $this->getUserTypeAttribute() === 'landlord';
+    }
+
+    /**
+     * Check if user is an admin
+     */
+    public function isAdmin()
+    {
+        return $this->getUserTypeAttribute() === 'admin';
+    }
+
+    /**
+     * Calculate and update the user's trust score.
+     */
+    public function updateTrustScore(): void
+    {
+        $score = 0.0;
+
+        // Base score for email verification
+        if ($this->hasVerifiedEmail()) {
+            $score += 0.1;
+        }
+
+        // Score for profile completeness
+        if ($this->profile && $this->profile->isComplete()) {
+            $score += 0.1;
+        }
+
+        // Score for identity verification
+        $identityVerification = $this->verifications()->where('verification_type', 'identity')->where('status', 'verified')->first();
+        if ($identityVerification) {
+            $score += 0.4; // Significant boost for identity verification
+        }
+
+        // Score for student verification
+        $studentVerification = $this->verifications()->where('verification_type', 'student')->where('status', 'verified')->first();
+        if ($studentVerification) {
+            $score += 0.2; // Boost for student verification
+        }
+
+        // Score for landlord verification (if applicable and implemented)
+        $landlordVerification = $this->verifications()->where('verification_type', 'landlord')->where('status', 'verified')->first();
+        if ($landlordVerification) {
+            $score += 0.2; // Boost for landlord verification
+        }
+
+        // Cap the score at 1.0
+        $this->trust_score = min(1.0, $score);
+        $this->save();
+
+        Log::info("User {$this->id} trust score updated to: {$this->trust_score}");
     }
 }
